@@ -119,6 +119,9 @@
               <el-dropdown-item @click.native="ShowPasteTable">{{
                 $t('paste_insert_table')
               }}</el-dropdown-item>
+              <el-dropdown-item @click.native="showSqlToMarkdownTable">{{
+                $t('sql_to_markdown_table')
+              }}</el-dropdown-item>
             </el-dropdown-menu>
           </el-dropdown>
           <el-button
@@ -151,6 +154,7 @@
           v-if="content"
           ref="Editormd"
           type="editor"
+          id="page-editor"
         ></Editormd>
       </el-row>
 
@@ -181,6 +185,12 @@
 
       <!-- Json格式化 -->
       <JsonBeautify :callback="insertValue" ref="JsonBeautify"></JsonBeautify>
+
+      <!-- sql转表格 -->
+      <SqlToMarkdownTable
+        :callback="insertValue"
+        ref="SqlToMarkdownTable"
+      ></SqlToMarkdownTable>
 
       <!-- 附件列表 -->
       <AttachmentList
@@ -249,6 +259,9 @@
         ref="Notify"
       ></Notify>
     </el-container>
+    <!-- 一个隐藏的可编辑元素。用于承载粘贴html代码。后续会用于转markdown -->
+    <div contenteditable="true" id="pastebin"></div>
+
     <Footer></Footer>
     <div class></div>
   </div>
@@ -280,12 +293,19 @@
   cursor: pointer;
   margin-left: 5px;
 }
+#pastebin {
+  opacity: 0.01;
+  width: 100%;
+  height: 1px;
+  overflow: hidden;
+}
 </style>
 
 <script>
 import Editormd from '@/components/common/Editormd'
 import JsonToTable from '@/components/common/JsonToTable'
 import JsonBeautify from '@/components/common/JsonBeautify'
+import SqlToMarkdownTable from '@/components/common/SqlToMarkdownTable'
 import Mock from '@/components/common/Mock'
 import TemplateList from '@/components/page/edit/TemplateList'
 import HistoryVersion from '@/components/page/edit/HistoryVersion'
@@ -295,12 +315,15 @@ import SortPage from '@/components/page/edit/SortPage'
 import Notify from '@/components/page/edit/Notify'
 import { Base64 } from 'js-base64'
 import { rederPageContent } from '@/models/page'
+const turndownPluginGfm = require('turndown-plugin-gfm')
+
 import {
   apiTemplateZh,
   databaseTemplateZh,
   apiTemplateEn,
   databaseTemplateEn
 } from '@/models/template'
+import TurndownService from 'turndown'
 
 export default {
   data() {
@@ -373,7 +396,8 @@ export default {
     PasteTable,
     SortPage,
     Mock,
-    Notify
+    Notify,
+    SqlToMarkdownTable
   },
   methods: {
     // 获取页面内容
@@ -503,7 +527,11 @@ export default {
       let childRef = this.$refs.JsonBeautify // 获取子组件
       childRef.dialogFormVisible = true
     },
-
+    // SQL转表格
+    showSqlToMarkdownTable() {
+      let childRef = this.$refs.SqlToMarkdownTable // 获取子组件
+      childRef.dialogFormVisible = true
+    },
     ShowRunApi() {
       window.open('http://runapi.showdoc.cc/')
     },
@@ -625,12 +653,20 @@ export default {
       let childRef = this.$refs.AttachmentList // 获取子组件
       childRef.show()
     },
-    /** 粘贴上传图片 **/
-    upload_paste_img(e) {
+    /** 监听剪切板 **/
+    // 以实现粘贴上传图片，html网页转markdown等
+    clipboardEvents(e) {
       var that = this
+      // 如果当前鼠标的焦点不在编辑器内，则中止
+      if (
+        !document.querySelector('#page-editor').contains(document.activeElement)
+      ) {
+        return
+      }
       var url = DocConfig.server + '/api/page/uploadImg'
       var clipboard = e.clipboardData
       for (var i = 0, len = clipboard.items.length; i < len; i++) {
+        // 如果剪切板里的内容是图片
         if (
           clipboard.items[i].kind == 'file' ||
           clipboard.items[i].type.indexOf('image') > -1
@@ -686,6 +722,40 @@ export default {
             }
           })
           e.preventDefault()
+        }
+        // 如果剪切板里的内容是html
+        else if (clipboard.items[i].type == 'text/html') {
+          e.preventDefault() // 阻止默认粘贴事件
+          clipboard.items[i].getAsString(htmlData => {
+            var pastebin = document.querySelector('#pastebin')
+            pastebin.innerHTML = htmlData
+            var text = pastebin.innerText // 利用插入html元素来获取其纯文本
+            // 如果其纯文本内容少于200字，那就当作是纯文本粘贴
+            if (text.length < 200) {
+              that.insertValue(text)
+            } else {
+              // 如果其纯文本内容多于200字，那就问要转markdown还是纯文本粘贴
+              that
+                .$confirm(that.$t('past_html_tips'), ' ', {
+                  confirmButtonText: that.$t('past_html_markdown'),
+                  cancelButtonText: that.$t('past_html_text')
+                })
+                .then(data => {
+                  var turndownService = new TurndownService()
+                  var gfm = turndownPluginGfm.gfm
+                  var tables = turndownPluginGfm.tables
+                  var strikethrough = turndownPluginGfm.strikethrough
+                  turndownService.use([gfm, tables, strikethrough])
+                  var markdown = turndownService.turndown(htmlData)
+                  that.insertValue(markdown)
+                })
+                .catch(() => {
+                  that.insertValue(text)
+                })
+            }
+          })
+        } else {
+          // 无动作。让默认粘贴事件做事。
         }
       }
     },
@@ -840,8 +910,9 @@ export default {
 
     this.heartBeatLock()
     this.remoteIsLock()
-    /** 监听粘贴上传图片 **/
-    document.addEventListener('paste', this.upload_paste_img)
+    /** 监听剪切板 **/
+    document.addEventListener('paste', this.clipboardEvents)
+
     this.lang = DocConfig.lang
     window.addEventListener('beforeunload', this.unLockOnClose)
     let g_open_cat_id = this.$store.state.open_cat_id // 全局变量-当前打开的目录id
@@ -853,8 +924,8 @@ export default {
   },
 
   beforeDestroy() {
-    // 解除对粘贴上传图片的监听
-    document.removeEventListener('paste', this.upload_paste_img)
+    // 解除对剪切板的监听
+    document.removeEventListener('paste', this.clipboardEvents)
     this.$message.closeAll()
     clearInterval(this.intervalId)
     this.unlock()

@@ -14,11 +14,13 @@
     "build": "node build/build.js"
   },
   "dependencies": {
-    "axios": "^0.17.1",
+    "axios": "^0.21.3",
     "babel-polyfill": "^6.26.0",
     "babel-preset-es2015": "^6.24.1",
     "element-ui": "^2.15.1",
     "moment": "^2.29.1",
+    "turndown": "^7.1.1",
+    "turndown-plugin-gfm": "^1.0.2",
     "url-search-params-polyfill": "^2.0.3",
     "vue": "^2.6.12",
     "vue-clipboard2": "^0.2.1",
@@ -77,6 +79,7 @@
     "selenium-server": "^3.141.59",
     "semver": "^5.7.1",
     "shelljs": "^0.7.6",
+    "tailwindcss": "^1.9.6",
     "uglifyjs-webpack-plugin": "^1.3.0",
     "url-loader": "^0.5.8",
     "vue-axios": "^2.1.5",

@@ -19,6 +19,7 @@ import 'url-search-params-polyfill'
 import 'babel-polyfill'
 import VueClipboard from 'vue-clipboard2'
 import store from './store/'
+import '../assets/tailwind.css' // 引入tailwind
 
 Vue.use(util)
 Vue.config.productionTip = false

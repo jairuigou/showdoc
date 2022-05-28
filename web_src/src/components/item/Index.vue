@@ -50,6 +50,18 @@
           </el-tooltip>
 
           <el-tooltip
+            v-if="lang == 'zh-cn'"
+            class="item"
+            effect="dark"
+            content="showdoc推送服务"
+            placement="top"
+          >
+            <a target="_blank" href="https://push.showdoc.com.cn">
+              <i class="el-icon-s-promotion"></i>
+            </a>
+          </el-tooltip>
+
+          <el-tooltip
             class="item"
             effect="dark"
             :content="$t('team_mamage')"
@@ -512,9 +524,13 @@ export default {
       params.append('confirm', '1')
       that.axios.post(url, params).then(function(response) {
         if (response.data.error_code === 0) {
-          that.$router.push({
-            path: '/'
-          })
+          if (response.data.data.logout_redirect_uri) {
+            window.location.href = response.data.data.logout_redirect_uri
+          } else {
+            that.$router.push({
+              path: '/'
+            })
+          }
         } else {
           that.$alert(response.data.error_message)
         }
